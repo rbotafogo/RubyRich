@@ -70,7 +70,7 @@ class BarChart
 
     @svg.selectAll("rect")
       .data(@dataset) { |d| d[:key] }
-      .enter(nil)
+      .enter._
       .append("rect")
       .on("mouseover") { $d3.select(@this).attr("fill", "orange") }
       .on("mouseout") { |d| $d3.select(@this)

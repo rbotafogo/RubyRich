@@ -21,11 +21,8 @@
 # OR MODIFICATIONS.
 ##########################################################################################
 
-require 'benchmark'
-
 require 'json'
 require_relative 'jsobject'
-require_relative 'rbobject'
 require_relative 'irbobject'
 
 class Sol
@@ -38,6 +35,7 @@ class Sol
   class Js
     java_import com.teamdev.jxbrowser.chromium.events.ConsoleListener
     java_import com.teamdev.jxbrowser.chromium.JSONString
+    java_import com.teamdev.jxbrowser.chromium.SavePageType
     
     #========================================================================================
     # Class RBListener listen for the Browser console.log messages
@@ -140,7 +138,8 @@ class Sol
     end
     
     #------------------------------------------------------------------------------------
-    # return [JSObject || primitive] the given property from the 'window' scope
+    # @param name [String] 
+    # @return [JSObject || primitive] the given property from the 'window' scope
     #------------------------------------------------------------------------------------
 
     def pull(name)
@@ -148,67 +147,14 @@ class Sol
     end
 
     #------------------------------------------------------------------------------------
-    # Proxies a ruby object into a javascript object.  The javascript object captures
-    # all method calls and forwads them to a packed ruby object, by calling method 'run'
-    # on this packed object
-    # @param obj [Object] The ruby object to be proxied
-    # @return [JSObject || RBObject]
-    #------------------------------------------------------------------------------------
-
-    def proxy(obj)
-
-      case obj
-      when TrueClass, FalseClass, Numeric, String, NilClass
-        obj
-      when Java::ComTeamdevJxbrowserChromium::JSValue
-        JSObject.build(obj)
-      when Proc
-        # TODO: Needs to test Proc proxying.  I don´t think the code ever gets here
-        blk2func(obj)
-      when Object
-        # B.obj = Callback.new(obj)
-        B.obj = Callback.build(obj)
-        RBObject.new(jeval("new RubyProxy(obj)"), obj, true)
-      else
-        raise "No method to proxy the given object: #{obj}"
-      end
-      
-    end
-    
-    #----------------------------------------------------------------------------------------
-    # Pack a ruby object for use inside a javascript script.  A packed ruby object is
-    # identical to a proxy object exect by the return value that is a java.JSValue and not
-    # a Sol::xxx object.
-    # @param obj [Object] The ruby object to be packed
-    # @return [java.JSObject] A java.JSObject that that implements the 'run' interface
-    #----------------------------------------------------------------------------------------
-
-    def pack(obj)
-
-      case obj
-      when TrueClass, FalseClass, Numeric, String, NilClass,
-           Java::ComTeamdevJxbrowserChromium::JSValue
-        obj
-      when Proc
-        blk2func(obj).jsvalue
-      when Object
-        B.obj = Callback.build(obj)
-        jeval("new RubyProxy(obj)")
-      else
-        raise "No method to pack the given object: #{obj}"
-      end
-      
-    end
-
-    #------------------------------------------------------------------------------------
     # Evaluates the javascript script synchronously and then proxies the result in a
-    # Ruby JSObject or RBObject
+    # Ruby JSObject or native ruby object
     # @param scrpt [String] a javascript script to be executed synchronously
-    # @return [JSObject || RBObject] a JSObject or one of its subclasses
+    # @return [JSObject || native Ruby object] a JSObject or an Object
     #------------------------------------------------------------------------------------
 
     def eval(scrpt)
-      proxy(@browser.executeJavaScriptAndReturnValue(scrpt))
+      proxy2rb(@browser.executeJavaScriptAndReturnValue(scrpt))
     end
 
     #------------------------------------------------------------------------------------
@@ -248,8 +194,8 @@ class Sol
     #------------------------------------------------------------------------------------
 
     def invoke(scope, function, *args)
-      args = nil if (args.size == 1 && args[0].nil?)
-      proxy(function.invoke(scope, *(args)))
+      args.shift if args[0].nil?
+      proxy2js(function.invoke(scope, *(args)))
     end
 
     #------------------------------------------------------------------------------------
@@ -275,13 +221,20 @@ class Sol
     end
 
     #------------------------------------------------------------------------------------
-    # TODO: Something is wrong here!!!!  Need to set B.block, but if we pass the B.block
-    # variable to make_callback, the application crashes.
+    # Creates a Ruby Callback object encapsulating the given block and then generates
+    # a javascript callback function that calls the block.  The reason we need the
+    # javascript function around the Ruby callback is to be able to set the context,
+    # 'this' variable.
+    # We first need to inject the block in jxBrowser and the call javascript
+    # make_callback that will wrap this object.
+    # @param blk [Block] a Ruby Block
+    # @return [JSFunction] a javascript function that sets the 'this' variable and
+    # calls the given block
     #------------------------------------------------------------------------------------
 
     def blk2func(blk)
       B.block = Callback.build(blk)
-      B.rr.make_callback(nil)
+      B.rr.make_callback[]
     end
     
     #------------------------------------------------------------------------------------
@@ -290,98 +243,81 @@ class Sol
 
     def method_missing(symbol, *args, &blk)
 
-      # if block is given, then create a javascript function that will call the block
-      # passing the args
-      args.push(blk2func(blk)) if (blk)
-        
       name = symbol.id2name
       name.gsub!(/__/,"$")
 
       if name =~ /(.*)=$/
-        ret = assign_window($1, process_args(args)[0])
+        assign_window($1, ruby2js(args)[0])
+      elsif (((obj = pull(name)).is_a? Sol::JSObject) && obj.function? && args.size > 0)
+        obj.send(*args, &blk)
       else
-        if (((ret = pull(name)).is_a? Sol::JSObject) && ret.function?)
-          if (args.size > 0)
-            if (args.size == 1 && args[0].nil?)
-              ret = ret.send
-            else
-              ret = ret.send(*args)
-            end
-          end
-        end
+        obj
       end
-      ret
     end
-#=begin    
+    
     #------------------------------------------------------------------------------------
     # Converts Ruby arguments into a javascript objects to run in a javascript
-    # script.  A Sol::JSObject and Sol::RBObject are similar in that they pack a 'native'
-    # object (either java.JSObject or ruby Object).  These objects show up in a ruby
-    # script and when injected in javascript their jsvalue is made available.  An
+    # script.  An
     # IRBObject (Internal Ruby Object) appears when a Ruby Callback is executed and
     # exists for the case that this object transitions between javascript and ends up
     # in a Ruby script.
     # @param args [Array] Ruby array with ruby arguments
     # @return args [Array] Ruby array with ruby arguments converted to javascript
     # arguments
-    # TODO: Can an IRBObject end up in a javascript script? If so, will it work fine?
-    # TODO: Make tests that allow Proc/block to be injected into javascript
     #------------------------------------------------------------------------------------
 
-    def process_args(args)
+    def ruby2js(args)
 
       args.map do |arg|
         case arg
-        when Sol::IRBObject # Sol::Callback
+        when TrueClass, FalseClass, Numeric, String, NilClass, Callback, Sol::IRBObject
           arg
-        when Sol::JSObject, Sol::RBObject
+        when Sol::JSObject
           arg.jsvalue
-        when Hash, Array
-          pack(arg)
+        when Proc
+          blk2func(arg).jsvalue
         when Symbol
           raise "Ruby Symbols are not supported in jxBrowser.  Converting ':#{arg}' not supported."
-        when Proc
-          p "i´m a proc... not implemented yet"
-          arg
+        when Object
+          pack(arg)
         else
-          arg
+          raise "This is not a proper argument #{arg}.  Did you use 'proxy' or 'pack'?"
         end
       end
       
     end
-#=end    
+
     #------------------------------------------------------------------------------------
-    # Converts Ruby arguments into a javascript objects to run in a javascript
-    # script.  A Sol::JSObject and Sol::RBObject are similar in that they pack a 'native'
-    # object (either java.JSObject or ruby Object).  These objects show up in a ruby
-    # script and when injected in javascript their jsvalue is made available.  An
+    # Converts Ruby arguments into a java objects so that they can be used as parameters
+    # to a java function call.
+    # An
     # IRBObject (Internal Ruby Object) appears when a Ruby Callback is executed and
     # exists for the case that this object transitions between javascript and ends up
     # in a Ruby script.
     # @param args [Array] Ruby array with ruby arguments
-    # @return args [Array] Ruby array with ruby arguments converted to javascript
-    # arguments
-    # TODO: Can an IRBObject end up in a javascript script? If so, will it work fine?
-    # TODO: Make tests that allow Proc/block to be injected into javascript
+    # @return args [Array] Ruby array with ruby arguments converted to java arguments
     #------------------------------------------------------------------------------------
 
-    def process_args2(args)
+    def ruby2java(args)
 
       args.map do |arg|
         case arg
-        when Sol::IRBObject
+        when TrueClass, FalseClass, Numeric, String, NilClass, Callback, Sol::IRBObject
           arg.to_java
-        when Sol::JSObject, Sol::RBObject
+        when com.teamdev.jxbrowser.chromium.JSObject
+          arg.to_java
+        when Sol::JSObject
           arg.jsvalue.to_java
-        when Hash, Array
-          pack(arg).to_java
+        when java.lang.Number
+          arg
+        when Proc
+          blk2func(arg).jsvalue.to_java
         when Symbol
           raise "Ruby Symbols are not supported in jxBrowser.  Converting ':#{arg}' not supported."
-        when Proc
-          p "i´m a proc... not implemented yet"
-          arg.to_java
+        when Object
+          pack(arg).to_java
         else
-          arg.to_java
+          raise "This is not a proper argument #{arg}.  Did you use 'proxy' or 'pack'?"
         end
       end
       
@@ -411,7 +347,16 @@ class Sol
       @browser.executeJavaScriptAndReturnValue(scrpt)
       
     end
- 
+    
+    #------------------------------------------------------------------------------------
+    #
+    #------------------------------------------------------------------------------------
+
+    def save_page
+      @browser.saveWebPage("T:\\Rodrigo\\complete.html", "T:\\Rodrigo\\Desenv",
+                           Java::ComTeamdevJxbrowserChromium::SavePageType::COMPLETE_HTML)
+    end
+    
     #------------------------------------------------------------------------------------
     # Returns a list of StyleSheet's
     #------------------------------------------------------------------------------------
@@ -423,11 +368,30 @@ class Sol
       CSSStyleSheets.new
     end
     
-    #------------------------------------------------------------------------------------
-    # Private methods
-    #------------------------------------------------------------------------------------
+    #----------------------------------------------------------------------------------------
+    # Pack a ruby object for use inside a javascript script.  A packed ruby object is
+    # identical to a proxy object exect by the return value that is a java.JSValue and not
+    # a Sol::xxx object.
+    # @param obj [Object] The ruby object to be packed
+    # @return [java.JSObject] A java.JSObject that that implements the 'run' interface
+    #----------------------------------------------------------------------------------------
 
-    private
+    def pack(obj)
+
+      case obj
+      when TrueClass, FalseClass, Numeric, String, NilClass,
+           Java::ComTeamdevJxbrowserChromium::JSValue
+        obj
+      when Proc
+        blk2func(obj).jsvalue
+      when Object
+        B.obj = Callback.build(obj)
+        jeval("new RubyProxy(obj)")
+      else
+        raise "No method to pack the given object: #{obj}"
+      end
+      
+    end
     
     #------------------------------------------------------------------------------------
     # Assign the data to the given named window property
@@ -436,7 +400,51 @@ class Sol
     def assign_window(property_name, data)
       window.setProperty(property_name, data)
     end
-        
+    
+    #------------------------------------------------------------------------------------
+    # Private methods
+    #------------------------------------------------------------------------------------
+    
+    private
+      
+    #------------------------------------------------------------------------------------
+    # Proxies a ruby object into a javascript object.  The javascript object captures
+    # all method calls and forwads them to a packed ruby object, by calling method 'run'
+    # on this packed object
+    # @param obj [Object] The ruby object to be proxied
+    # @return [JSObject]
+    #------------------------------------------------------------------------------------
+
+    def proxy2rb(obj)
+
+      case obj
+      when TrueClass, FalseClass, Numeric, String, NilClass
+        obj
+      when Java::ComTeamdevJxbrowserChromium::JSValue
+        JSObject.build(obj)
+      when Proc
+        blk2func(obj)
+      else
+        raise "No method to proxy the given object: #{obj}"
+      end
+
+    end
+    
+    def proxy2js(obj)
+
+      case obj
+      when TrueClass, FalseClass, Numeric, String, NilClass
+        obj
+      when Java::ComTeamdevJxbrowserChromium::JSValue
+        JSObject.build(obj)
+      when Proc
+        blk2func(obj)
+      else
+        raise "No method to proxy the given object: #{obj}"
+      end
+
+    end
+
   end
   
 end

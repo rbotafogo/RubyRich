@@ -65,14 +65,17 @@ class Sol
 
   # directory where jxbrowser jar files are stored on the web
   @rbotafogo_gist_dir = "https://gist.github.com/rbotafogo/8e5425494c08b8db1d7228a1f4a726fe/raw"
+  # directory for jxBrowser-6.8
+  # @jx_dir = "0dac333673300a1f0132df9298de807c82372e25"
+  # direcroty for jxBrowser-6.12
+  @jx_dir = "2063704181fc5171459ef5a3c6ad5359a2efc517"
+  
   # Windows platform
-  # @jx_dir = "902699d3017e6cda80370f9bcb7aba6a331070a8"
-  @jx_dir = "0dac333673300a1f0132df9298de807c82372e25"
-  @jxwin = "jxbrowser-win-6.8.jar"
+  @jxwin = "jxbrowser-win-6.12.jar"
   # Linux32 platform
-  @jxlinux32 = "jxbrowser-linux32-6.8.jar"
+  @jxlinux32 = "jxbrowser-linux32-6.12.jar"
   # Linux64 platform
-  @jxlinux64 = "jxbrowser-linux64-6.8.jar"
+  @jxlinux64 = "jxbrowser-linux64-6.12.jar"
   # Mac platform
   @jxmac = "jxbrowser-mac-6.8.jar"
 

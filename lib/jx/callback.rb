@@ -37,7 +37,6 @@ class Sol
   
   class Callback
     include Java::ComRbMdarray_sol.RubyCallbackInterface
-    # java_import 'com.teamdev.jxbrowser.chromium.JSAccessible'
 
     attr_reader :ruby_obj
     attr_reader :this
@@ -53,6 +52,8 @@ class Sol
         HashCallback.new(ruby_obj)
       when Array
         ArrayCallback.new(ruby_obj)
+      when Proc
+        ProcCallback.new(ruby_obj)
       else
         Callback.new(ruby_obj)
       end
@@ -102,7 +103,8 @@ class Sol
       
       # first argument is the 'method' name 
       method = args.shift
-      
+
+      blok = nil
       # try to convert last argument to block if it is a String.  If fails to convert
       # the String to a block, then leave the string untouched as the last argument.
       if ((last = args[-1]).is_a? String)
@@ -116,15 +118,11 @@ class Sol
       end
 
       # convert all remaining arguments to Ruby 
-      params = Callback.process_args(args)
+      params = Callback.js2ruby(args)
 
-      case @ruby_obj
-      when Proc
-        B.pack(instance_exec(*params, &(@ruby_obj)))
-      else
-        B.pack(@ruby_obj.send(method, *params, &blok))
-      end
-      
+      # call the method with the given arguments
+      B.pack(@ruby_obj.send(method, *params, &blok))
+
     end
     
     #----------------------------------------------------------------------------------------
@@ -160,44 +158,21 @@ class Sol
     # Converts given arguments into Ruby arguments
     # @param args [Array] array of javascript arguments to be converted into ruby
     # arguments to be given to @ruby_obj.
+    # (1) Note that if the argument is a JSValue, then we are assuming here that it
+    # is a proxy object, since there is no reason to work directly with java objects.
+    # If we want to allow java objects to be injected into js (as is allowed by
+    # jxBrowser, then we need to start treating this case
     #------------------------------------------------------------------------------------
 
-    def self.process_args(args)
-
-      collect = []
-
-      args.each do |arg|
-        if (arg.is_a? Java::ComTeamdevJxbrowserChromium::JSValue)
-          collect << Callback.process_arg(arg)
-        else
-          collect << arg
-        end
+    def self.js2ruby(args)
+      
+      args.map! do |arg|
+        (arg.is_a? Java::ComTeamdevJxbrowserChromium::JSValue)? # (1)
+          IRBObject.new(B.eval_obj(arg, "ruby_obj")) : arg
       end
       
-      collect
-      
     end
 
-    #------------------------------------------------------------------------------------
-    #
-    #------------------------------------------------------------------------------------
-
-    private
-    
-    #------------------------------------------------------------------------------------
-    # Converts given argument into Ruby argument.
-    # @param arg [jsvalue] A javascript value that needs to be converted to a ruby
-    # object for processing by the 'run' method.
-    # @return [Sol::JSObject || Sol::IRBObject] The jsvalue wrapped into a ruby object
-    # if the jsvalue is actually a proxied ruby object, then wrapp it in an IRBObject
-    # otherwise wrapp it into a JSObject.  
-    #------------------------------------------------------------------------------------
-
-    def self.process_arg(arg)
-      (B.eval_obj(arg, "isProxy").isUndefined())?
-        JSObject.build(arg) : IRBObject.new(B.eval_obj(arg, "ruby_obj"))
-    end
-    
   end
 
   #=======================================================================================
@@ -211,7 +186,7 @@ class Sol
     #------------------------------------------------------------------------------------
 
     def initialize(ruby_obj)
-      ruby_obj.extend(JSArrayInterface)
+      ruby_obj.extend(JS2ArrayInterface)
       super(ruby_obj)
     end
     
@@ -236,7 +211,7 @@ class Sol
     #------------------------------------------------------------------------------------
 
     def initialize(ruby_obj)
-      ruby_obj.extend(InsensitiveHash)
+      ruby_obj.extend(JS2HashInterface)
       super(ruby_obj)
     end
     
@@ -250,6 +225,24 @@ class Sol
     
   end
   
+  #=======================================================================================
+  #
+  #=======================================================================================
+  
+  class ProcCallback < Callback
+
+    def run(*args)
+
+      # first argument is the 'method' name 
+      method = args.shift
+      
+      # convert all remaining arguments to Ruby 
+      params = Callback.js2ruby(args)
+
+      B.pack(instance_exec(*params, &(@ruby_obj)))
+
+    end
+    
+  end
+
 end
-
-

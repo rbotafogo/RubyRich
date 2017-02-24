@@ -47,14 +47,18 @@ class Sol
         jsvalue.getStringValue()
       elsif (jsvalue.isStringObject())
         jsvalue.getStringValue()
-      elsif (jsvalue.isArray())
-        JSArray.new(jsvalue.asArray(), scope)
       elsif (jsvalue.isFunction())
         JSFunction.new(jsvalue.asFunction(), scope)
-      elsif (jsvalue.isObject())
+      elsif (jsvalue.isObject() || jsvalue.isUndefined())
+        # check to see if the object is a proxied object. If it is then return the
+        # ruby_obj otherwise, wrap the object in a JSObject
+        # B.assign_window("test", jsvalue)
+        #(B.jeval("test.isProxy").isUndefined())?
+        #  JSObject.new(jsvalue, scope) : B.jeval("test.ruby_obj").asJavaObject().ruby_obj
+        # if jsvalue.hasProperty("isProxy")
+        #  p jsvalue.getPropertyNames().toString
+        # end
         JSObject.new(jsvalue, scope)
-      elsif (jsvalue.isUndefined())
-        JSUndefined.new(jsvalue, scope)
       elsif (jsvalue.is_a? Java::ComTeamdevJxbrowserChromium::am)
         raise "This is probably a Symbol"
       else
@@ -63,6 +67,43 @@ class Sol
 
     end
     
+    #------------------------------------------------------------------------------------
+    # Builds a new Ruby JSObject or one of its more specific subclasses from the given
+    # java jsvalue
+    #------------------------------------------------------------------------------------
+
+    def self.build2(jsvalue, scope = B.document)
+
+      if (jsvalue.isBoolean())
+        jsvalue.getBooleanValue()
+      elsif (jsvalue.isBooleanObject())
+        jsvalue.getBooleanValue()
+      elsif (jsvalue.isNumber())
+        jsvalue.getNumberValue()
+      elsif (jsvalue.isNumberObject())
+        jsvalue.getNumberValue()
+      elsif (jsvalue.isString())
+        jsvalue.getStringValue()
+      elsif (jsvalue.isStringObject())
+        jsvalue.getStringValue()
+      elsif (jsvalue.isFunction())
+        JSFunction.new(jsvalue.asFunction(), scope)
+      elsif (jsvalue.isObject() || jsvalue.isUndefined())
+        # check to see if the object is a proxied object. If it is then return the
+        # ruby_obj otherwise, wrap the object in a JSObject
+        if jsvalue.hasProperty("isProxy")
+          JSObject.new(jsvalue, scope)
+        else
+          JSObject.new(jsvalue, scope)
+        end
+      elsif (jsvalue.is_a? Java::ComTeamdevJxbrowserChromium::am)
+        raise "This is probably a Symbol"
+      else
+        raise "Unknown jsvalue type #{jsvalue}"
+      end
+
+    end
+
     #------------------------------------------------------------------------------------
     #
     #------------------------------------------------------------------------------------
@@ -104,20 +145,19 @@ class Sol
 
     def method_missing(symbol, *args, &blk)
 
-      # if block is given, then create a javascript function that will call the block
-      # passing the args
-      args.push(B.blk2func(blk)) if (blk)
-
+      # if block is given, add the block as the last argument of the method
+      args.push(blk) if blk
+      
       name = symbol.id2name
 
       if name == "[]="
-        assign(*(B.process_args(args)))
+        assign(*(B.ruby2js(args)))
       elsif name =~ /(.*)=$/
-        assign($1, B.process_args(args)[0])
+        assign($1, B.ruby2js(args)[0])
       elsif (@jsvalue.undefined?)
         raise "Cannot extract property '#{name}' from undefined object"
-      elsif ((member = @jsvalue.getProperty(name)).function? && args.size > 0)
-        B.invoke(@jsvalue, member, *(B.process_args2(args)))
+      elsif ((member = @jsvalue.getProperty(name)).isFunction() && args.size > 0)
+        B.invoke(@jsvalue, member, *(B.ruby2java(args)))
       else
         # Build a JSObject in the scope of @jsvalue
         JSObject.build(member, @jsvalue)        
@@ -133,42 +173,10 @@ class Sol
       false
     end
 
-    def boolean?
-      false
-    end
-
-    def boolean_object?
-      false
-    end
-
     def function?
       false
     end
 
-    def nil?
-      false
-    end
-
-    def number?
-      false
-    end
-
-    def number_object?
-      false
-    end
-    
-    def object?
-      true
-    end
-    
-    def string?
-      false
-    end
-    
-    def string_object?
-     false
-    end
-    
     def undefined?
       false
     end
@@ -178,11 +186,8 @@ class Sol
 end
 
 require_relative 'jsfunction'
-require_relative 'jsarray'
+
 require_relative 'jsstyle_sheet'
-require_relative 'jsundefined'
 require_relative 'callback'
-require_relative 'proxy_array'
-# require_relative 'jssymbol'
 
 

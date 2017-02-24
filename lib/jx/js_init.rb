@@ -28,19 +28,21 @@ B.load("ruby_proxy.js")
 B.load("hash_handler.js")
 B.load("array_handler.js")
 
-B.identity = Sol::JSObject.build(
-  B.browser.executeJavaScriptAndReturnValue(<<-EOT)
-    rr.identity  
-  EOT
+B.identity = Sol::JSFunction.new(
+  B.browser.executeJavaScriptAndReturnValue("rr.identity"), B.document
 )
 
-B.instanceOf = Sol::JSObject.build(
-  B.browser.executeJavaScriptAndReturnValue(<<-EOT)
-    rr.instanceOf  
-  EOT
+B.instanceOf = Sol::JSFunction.new(
+  B.browser.executeJavaScriptAndReturnValue("rr.instanceOf"), B.document
 )
 
 B.freeze
+
+$d3 = B.pull("d3")
+$dc = B.pull("dc")
+
+$d3.freeze
+$dc.freeze
 
 module ObjectExtension
 
@@ -50,13 +52,3 @@ module ObjectExtension
   end
   
 end
-
-$robject = B.proxy(Object.new)
-$robject.extend(ObjectExtension)
-B.robject = $robject
-
-$d3 = B.pull("d3")
-$dc = B.pull("dc")
-
-$d3.freeze
-$dc.freeze

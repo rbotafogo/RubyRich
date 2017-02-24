@@ -85,37 +85,14 @@ class Sol
       @ruby_obj = @jsvalue.asJavaObject().ruby_obj
     end
 
-    #----------------------------------------------------------------------------------------
-    #
-    #----------------------------------------------------------------------------------------
-
-    def is_instance_of(class_name)
-      B.invoke(@jsvalue, @run_func, "is_instance_of", class_name)
-    end
-
     #------------------------------------------------------------------------------------
-    # An IRBObject is called with ruby arguments, so it does not need to call any
-    # process_arguments method as it is proxies a Ruby object
-    # TODO: Might actually need to process_args on the argument since we use invoke
-    # BUG!!!
+    #
     #------------------------------------------------------------------------------------
 
     def method_missing(symbol, *args, &blk)
-      # B.invoke(@jsvalue, @run_func, symbol, *args)
       @ruby_obj.send(symbol, *args, &blk)
     end
     
-    #------------------------------------------------------------------------------------
-    #
-    #------------------------------------------------------------------------------------
-
-    def native(*args)
-      p "IRBObject native method.  NOT WORKING YET!!"
-      method = args.shift
-      # other is a ruby object
-      other = args.shift
-    end
-
   end
 
 end
