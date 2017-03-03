@@ -49,53 +49,16 @@ class Sol
         jsvalue.getStringValue()
       elsif (jsvalue.isFunction())
         JSFunction.new(jsvalue.asFunction(), scope)
-      elsif (jsvalue.isObject() || jsvalue.isUndefined())
+      elsif (jsvalue.isObject())
         # check to see if the object is a proxied object. If it is then return the
         # ruby_obj otherwise, wrap the object in a JSObject
-        # B.assign_window("test", jsvalue)
-        #(B.jeval("test.isProxy").isUndefined())?
-        #  JSObject.new(jsvalue, scope) : B.jeval("test.ruby_obj").asJavaObject().ruby_obj
-        # if jsvalue.hasProperty("isProxy")
-        #  p jsvalue.getPropertyNames().toString
-        # end
-        JSObject.new(jsvalue, scope)
-      elsif (jsvalue.is_a? Java::ComTeamdevJxbrowserChromium::am)
-        raise "This is probably a Symbol"
-      else
-        raise "Unknown jsvalue type #{jsvalue}"
-      end
-
-    end
-    
-    #------------------------------------------------------------------------------------
-    # Builds a new Ruby JSObject or one of its more specific subclasses from the given
-    # java jsvalue
-    #------------------------------------------------------------------------------------
-
-    def self.build2(jsvalue, scope = B.document)
-
-      if (jsvalue.isBoolean())
-        jsvalue.getBooleanValue()
-      elsif (jsvalue.isBooleanObject())
-        jsvalue.getBooleanValue()
-      elsif (jsvalue.isNumber())
-        jsvalue.getNumberValue()
-      elsif (jsvalue.isNumberObject())
-        jsvalue.getNumberValue()
-      elsif (jsvalue.isString())
-        jsvalue.getStringValue()
-      elsif (jsvalue.isStringObject())
-        jsvalue.getStringValue()
-      elsif (jsvalue.isFunction())
-        JSFunction.new(jsvalue.asFunction(), scope)
-      elsif (jsvalue.isObject() || jsvalue.isUndefined())
-        # check to see if the object is a proxied object. If it is then return the
-        # ruby_obj otherwise, wrap the object in a JSObject
-        if jsvalue.hasProperty("isProxy")
-          JSObject.new(jsvalue, scope)
-        else
+        if (jsvalue.hasProperty("isProxy"))
+          jsvalue.getProperty("ruby_obj").asJavaObject().ruby_obj
+        else        
           JSObject.new(jsvalue, scope)
         end
+      elsif (jsvalue.isUndefined())
+        JSObject.new(jsvalue, scope)
       elsif (jsvalue.is_a? Java::ComTeamdevJxbrowserChromium::am)
         raise "This is probably a Symbol"
       else
@@ -149,7 +112,8 @@ class Sol
       args.push(blk) if blk
       
       name = symbol.id2name
-
+      # p "method_missing #{name}"
+      
       if name == "[]="
         assign(*(B.ruby2js(args)))
       elsif name =~ /(.*)=$/

@@ -52,7 +52,7 @@ class Sol
       # if block is given, then create a javascript function that will call the block
       # passing the args
       args.push(blk) if blk
-      
+
       # args need to be processed before invokation converting then to java objects
       B.invoke(@scope, @jsvalue, *(B.ruby2java(args)))
       
@@ -74,7 +74,6 @@ class Sol
 
       # if block is given, then create a javascript function that will call the block
       # passing the args
-      # args.push(B.blk2func(blk)) if blk
       send(*args, &blk)
       
     end

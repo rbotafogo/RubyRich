@@ -73,7 +73,7 @@ class Sol
 
       # listen for console events
       @browser.addConsoleListener(RBListener.new)
-      
+
     end
         
     #------------------------------------------------------------------------------------
@@ -154,7 +154,7 @@ class Sol
     #------------------------------------------------------------------------------------
 
     def eval(scrpt)
-      proxy2rb(@browser.executeJavaScriptAndReturnValue(scrpt))
+      proxy(@browser.executeJavaScriptAndReturnValue(scrpt))
     end
 
     #------------------------------------------------------------------------------------
@@ -175,6 +175,7 @@ class Sol
 
     def eval_obj(jsobject, prop)
       B.obj = push(jsobject)
+      # assign_window("obj", push(jsobject))
       jeval(<<-EOT)
          obj.#{prop}
       EOT
@@ -194,8 +195,8 @@ class Sol
     #------------------------------------------------------------------------------------
 
     def invoke(scope, function, *args)
-      args.shift if args[0].nil?
-      proxy2js(function.invoke(scope, *(args)))
+      args = nil if (args.size == 1 && args[0].nil?)
+      proxy(function.invoke(scope, *(args)))
     end
 
     #------------------------------------------------------------------------------------
@@ -233,8 +234,8 @@ class Sol
     #------------------------------------------------------------------------------------
 
     def blk2func(blk)
-      B.block = Callback.build(blk)
-      B.rr.make_callback[]
+      assign_window("block", Callback.build(blk))
+      proxy(@browser.executeJavaScriptAndReturnValue("rr.make_callback();"))
     end
     
     #------------------------------------------------------------------------------------
@@ -245,7 +246,7 @@ class Sol
 
       name = symbol.id2name
       name.gsub!(/__/,"$")
-
+      
       if name =~ /(.*)=$/
         assign_window($1, ruby2js(args)[0])
       elsif (((obj = pull(name)).is_a? Sol::JSObject) && obj.function? && args.size > 0)
@@ -385,7 +386,8 @@ class Sol
       when Proc
         blk2func(obj).jsvalue
       when Object
-        B.obj = Callback.build(obj)
+        # B.obj = Callback.build(obj)
+        assign_window("obj", Callback.build(obj))
         jeval("new RubyProxy(obj)")
       else
         raise "No method to pack the given object: #{obj}"
@@ -415,7 +417,7 @@ class Sol
     # @return [JSObject]
     #------------------------------------------------------------------------------------
 
-    def proxy2rb(obj)
+    def proxy(obj)
 
       case obj
       when TrueClass, FalseClass, Numeric, String, NilClass
@@ -430,21 +432,6 @@ class Sol
 
     end
     
-    def proxy2js(obj)
-
-      case obj
-      when TrueClass, FalseClass, Numeric, String, NilClass
-        obj
-      when Java::ComTeamdevJxbrowserChromium::JSValue
-        JSObject.build(obj)
-      when Proc
-        blk2func(obj)
-      else
-        raise "No method to proxy the given object: #{obj}"
-      end
-
-    end
-
   end
   
 end

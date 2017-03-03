@@ -74,7 +74,7 @@ $d3.select("body")
   .text("Click here to remove a bar")
 
 
-ex = Example.new(20)
+ex = Example.new(100)
 ex.gen_random_data
 
 bplot = BarChart.new(ex.dataset, width: 600, height: 250, padding: 50)

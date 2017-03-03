@@ -19,6 +19,7 @@
 # OR MODIFICATIONS.
 ##########################################################################################
 
+require 'jruby/profiler'
 require_relative '../../config' if @platform == nil
 require 'mdarray-sol'
 
@@ -77,11 +78,12 @@ class BarChart
                           .transition(nil)
                           .duration(500)
                           .attr("fill", "rgb(0, 0, #{(d[:value] * 10).to_i})" )} 
-      .attr("x") { |d, i| x_scale[i]}
-      .attr("y") { |d, i| height - y_scale[d[:value]] }
-      .attr("width", x_scale.scale.rangeBand(nil))
-      .attr("height") { |d, i| y_scale[d[:value]] }
-      .attr("fill") { |d, i| "rgb(0, 0, #{(d[:value] * 10).to_i})" }
+      .attr({
+              "x"=> -> (d, i, z) { x_scale[i] },
+              "y"=> -> (d, i, z) { height - y_scale[d[:value]] },
+              "width"=> x_scale.scale.rangeBand(nil),
+              "height"=> -> (d, i, z) { y_scale[d[:value]] },
+              "fill"=> -> (d, i, z) { "rgb(0, 0, #{(d[:value] * 10).to_i})" }})
 
   end
 
@@ -158,18 +160,34 @@ class BarChart
     # available inside blocks.  I don´t know if there is a better way of doing
     # this.  Tried googling for a better solution but without success!
     x_scale, y_scale, height = @x_scale, @y_scale, @height
-    
+
+    #profile_data = JRuby::Profiler.profile do
+
+    # Having all atributes set inside a single .attr call is more efficient than
+    # having multiple .attr calls
     svg.selectAll("rect")
       .data(@dataset) { |d| d[:key] }
-      .transition(nil)
-      .delay { |d, i| i * 100 }
-      .duration(100)
-      .attr("x"=> ->(d, i, z) { x_scale[i] })
-      .attr("y"=> ->(d, i, z) {height - y_scale[d[:value]] })
-      .attr("width", x_scale.scale.rangeBand(nil))
-      .attr("height"=> ->(d, i, z) {y_scale[d[:value]]})
-      .attr("fill") { |d, i| "rgb(0, 0, #{(d[:value] * 10).to_i})" }
+      .attr({
+              "x"=> ->(d, i, z) { x_scale[i] },
+              "y"=> ->(d, i, z) {height - y_scale[d[:value]] },
+              "width"=> x_scale.scale.rangeBand(nil),
+              "height"=> ->(d, i, z) {y_scale[d[:value]]},
+              "fill"=> ->(d, i, z) { "rgb(0, 0, #{(d[:value] * 10).to_i})" }})
+    #end
+
+      # .transition(nil)
+      # .delay { |d, i| i * 100 }
+      # .duration(100)
     
+=begin    
+    my_output_stream = java.io.ByteArrayOutputStream.new
+    print_stream = java.io.PrintStream.new(my_output_stream)
+    
+    profile_printer = JRuby::Profiler::FlatProfilePrinter.new(profile_data)
+    profile_printer.printProfile(print_stream)
+    result = my_output_stream.toString    
+    p result
+=end    
   end
 
   #--------------------------------------------------------------------------------------
@@ -182,14 +200,14 @@ class BarChart
 
     svg.selectAll("text")
       .data(@dataset) { |d| d[:key] }
-      .transition(nil)
-      .delay { |d, i| i * 100 }
-      .duration(500)
       .text { |d, i| d[:value] }
       .attr({"x"=> ->(d, i, z) {x_scale[i] + x_scale.scale.rangeBand(nil) / 2},
              "y"=> ->(d, i, z) {height - y_scale[d[:value]] + 14 }})
       .attr(style)
-
+    
+      #.transition(nil)
+      #.delay { |d, i| i * 100 }
+      #.duration(500)
   end
   
   #--------------------------------------------------------------------------------------

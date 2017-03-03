@@ -112,10 +112,10 @@ class ScatterPlot
   def add_labels(x_scale = @x_scale, y_scale = @y_scale)
     @svg.selectAll("text")
       .data(@dataset)
-      .enter(nil)
+      .enter._
       .append("text")
-      .call(&style)
       .text { |d, i| "(#{d[0].to_i}, #{d[1].to_i})" }
+      .call(&style)
       .attr("x") { |d, i| x_scale[d[0]] }
       .attr("y") { |d, i| y_scale[d[1]] }
   end

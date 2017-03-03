@@ -165,10 +165,10 @@ class Sol
     #------------------------------------------------------------------------------------
 
     def self.js2ruby(args)
-      
       args.map! do |arg|
-        (arg.is_a? Java::ComTeamdevJxbrowserChromium::JSValue)? # (1)
-          IRBObject.new(B.eval_obj(arg, "ruby_obj")) : arg
+        (arg.is_a? Java::ComTeamdevJxbrowserChromium::JSValue)?
+          ((B.eval_obj(arg, "isProxy").isUndefined())? JSObject.build(arg) : 
+             IRBObject.new(B.eval_obj(arg, "ruby_obj"))) : arg
       end
       
     end
@@ -235,7 +235,7 @@ class Sol
 
       # first argument is the 'method' name 
       method = args.shift
-      
+      #p args
       # convert all remaining arguments to Ruby 
       params = Callback.js2ruby(args)
 

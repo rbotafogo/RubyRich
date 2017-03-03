@@ -39,75 +39,27 @@ class MDArraySolTest < Test::Unit::TestCase
 
     end
         
-#=begin
     #--------------------------------------------------------------------------------------
     #
     #--------------------------------------------------------------------------------------
 
-    should "proxy nested ruby arrays" do
-      
-      a3 = [[1, 2], [3, 4], [5, 6, [7, [8, 9]]]]
-      
-      B.p3 = a3
-
-      B.eval(<<-EOT)
-        var assert = chai.assert;
-        
-        var val = p3.map(function(x) { return x; });
-        assert.equal(1, val[0][0]);
-        assert.equal(3, val[1][0]);
-        assert.equal(6, val[2][1]);
-        assert.equal(7, val[2][2][0]);
-        assert.equal(9, val[2][2][1][1]);
-
-      EOT
-
-    end
-#=end    
-
-    #--------------------------------------------------------------------------------------
-    #
-    #--------------------------------------------------------------------------------------
-
-#=begin
-    should "proxy a ruby arrays" do
+    should "inject and retrieve back the same ruby objects" do
 
       a1 = [1, 2, 3]
-
       B.p1 = a1
 
-      B.eval(<<-EOT)
-        var assert = chai.assert;
-
-        // val is a proxied Ruby object
-        var val = p1.map(function(x) { return x; });
-
-        // val can be inspected by calling method to_s()
-        assert.equal('[1.0, 2.0, 3.0]', val.to_s());
-
-        // Note that each_with_index is a Ruby array method that accepts a block.
-        // Here we pass a javascript function in place of a block.
-        var cumSum = 0;
-        p1.each_with_index(function(x, i) {
-          if (i % 2 == 0) {
-            cumSum = cumSum + x;
-          }
-        });
-        assert.equal(4, cumSum);
-        
-      EOT
-
       # extracts back the B.p1 variable.  It will be a ruby object
+      p "extracting b1"
       b1 = B.p1
       p b1
+      
       assert_equal(2, b1[1])
       p b1.concat([4, 5, 6])
       p b1[3]
-      # [-1, -2, -3].concat(b1)
-
+      p [-1, -2, -3].concat(b1)
+      
     end
-#=end
-    
+        
 #=begin    
     #--------------------------------------------------------------------------------------
     #
@@ -255,7 +207,65 @@ class MDArraySolTest < Test::Unit::TestCase
       EOT
       
     end
+
+    #--------------------------------------------------------------------------------------
+    #
+    #--------------------------------------------------------------------------------------
+
+    should "proxy a ruby arrays" do
+
+      a1 = [1, 2, 3]
+
+      B.p1 = a1
+
+      B.eval(<<-EOT)
+        var assert = chai.assert;
+
+        // val is a proxied Ruby object
+        var val = p1.map(function(x) { return x; });
+
+        // val can be inspected by calling method to_s()
+        assert.equal('[1.0, 2.0, 3.0]', val.to_s());
+
+        // Note that each_with_index is a Ruby array method that accepts a block.
+        // Here we pass a javascript function in place of a block.
+        var cumSum = 0;
+        p1.each_with_index(function(x, i) {
+          if (i % 2 == 0) {
+            cumSum = cumSum + x;
+          }
+        });
+        assert.equal(4, cumSum);
+        
+      EOT
+
+    end
+
+    #--------------------------------------------------------------------------------------
+    #
+    #--------------------------------------------------------------------------------------
+
+    should "proxy nested ruby arrays" do
+      
+      a3 = [[1, 2], [3, 4], [5, 6, [7, [8, 9]]]]
+      
+      B.p3 = a3
+
+      B.eval(<<-EOT)
+        var assert = chai.assert;
+        
+        var val = p3.map(function(x) { return x; });
+        assert.equal(1, val[0][0]);
+        assert.equal(3, val[1][0]);
+        assert.equal(6, val[2][1]);
+        assert.equal(7, val[2][2][0]);
+        assert.equal(9, val[2][2][1][1]);
+
+      EOT
+
+    end
 #=end
+    
   end
   
 end
